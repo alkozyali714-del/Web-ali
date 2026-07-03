@@ -353,14 +353,24 @@ if __name__ == '__main__':
     
     import threading
     import asyncio
+    import sys
 
     def start_bot():
-        loop = asyncio.new_event_loop()
-        asyncio.set_event_loop(loop)
-        loop.run_until_complete(run_bot())
+        """تشغيل البوت مع التقاط الأخطاء"""
+        try:
+            print("🚀 بدء تشغيل البوت من الخيط...")
+            asyncio.run(run_bot())
+        except Exception as e:
+            print(f"❌ فشل تشغيل البوت: {e}")
+            import traceback
+            traceback.print_exc()
 
+    # تشغيل البوت في خيط منفصل (غير Daemon)
     bot_thread = threading.Thread(target=start_bot, daemon=False)
     bot_thread.start()
+    print("✅ تم بدء خيط البوت")
 
+    # تشغيل خادم Flask
     port = int(os.getenv('PORT', 5000))
+    print(f"🌐 تشغيل Flask على المنفذ {port}")
     app.run(host='0.0.0.0', port=port, debug=False)
