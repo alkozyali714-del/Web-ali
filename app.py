@@ -21,7 +21,10 @@ app.config['SQLALCHEMY_DATABASE_URI'] = os.getenv('DATABASE_URL')
 app.config['SQLALCHEMY_TRACK_MODIFICATIONS'] = False
 db = SQLAlchemy(app)
 
-BOT_TOKEN = os.getenv('TELEGRAM_BOT_TOKEN')
+# ------------------- التوكن الجديد -------------------
+BOT_TOKEN = "8945844684:AAE7YdLjf8zP-FEODT_Hg-ZBPQF1UdifPkQ"
+# ----------------------------------------------------
+
 ADMIN_ID = os.getenv('ADMIN_ID')
 
 # حالات محادثة الشحن
@@ -318,7 +321,8 @@ async def cancel(update: Update, context: ContextTypes.DEFAULT_TYPE):
     return ConversationHandler.END
 
 # ---------- تشغيل البوت ----------
-def run_bot():
+async def run_bot():
+    print("🚀 بدء تشغيل البوت...")
     application = Application.builder().token(BOT_TOKEN).build()
 
     conv_handler = ConversationHandler(
@@ -337,16 +341,26 @@ def run_bot():
     application.add_handler(CallbackQueryHandler(button_handler))
     application.add_handler(conv_handler)
 
-    application.run_polling()
+    await application.initialize()
+    await application.start()
+    await application.updater.start_polling()
+    print("✅ البوت يعمل الآن...")
 
 # ---------- تشغيل التطبيق ----------
 if __name__ == '__main__':
     with app.app_context():
         db.create_all()
-    # تشغيل البوت في حلقة asyncio مستقلة
+    
+    import threading
     import asyncio
-    loop = asyncio.new_event_loop()
-    asyncio.set_event_loop(loop)
-    loop.create_task(run_bot())  # تشغيل البوت كمهمة غير متزامنة
+
+    def start_bot():
+        loop = asyncio.new_event_loop()
+        asyncio.set_event_loop(loop)
+        loop.run_until_complete(run_bot())
+
+    bot_thread = threading.Thread(target=start_bot, daemon=False)
+    bot_thread.start()
+
     port = int(os.getenv('PORT', 5000))
     app.run(host='0.0.0.0', port=port, debug=False)
