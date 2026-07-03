@@ -343,7 +343,10 @@ def run_bot():
 if __name__ == '__main__':
     with app.app_context():
         db.create_all()
-    import threading
-    threading.Thread(target=run_bot, daemon=True).start()
+    # تشغيل البوت في حلقة asyncio مستقلة
+    import asyncio
+    loop = asyncio.new_event_loop()
+    asyncio.set_event_loop(loop)
+    loop.create_task(run_bot())  # تشغيل البوت كمهمة غير متزامنة
     port = int(os.getenv('PORT', 5000))
     app.run(host='0.0.0.0', port=port, debug=False)
