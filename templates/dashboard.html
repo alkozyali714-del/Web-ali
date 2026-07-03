@@ -1,0 +1,190 @@
+<!DOCTYPE html>
+<html lang="ar" dir="ltr">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0">
+    <title>لوحة التحكم</title>
+    <script src="https://telegram.org/js/telegram-web-app.js"></script>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <style>
+        body {
+            background: var(--tg-theme-secondary-bg-color, #f0f2f5);
+            color: var(--tg-theme-text-color, #000);
+            font-family: 'Inter', sans-serif;
+            min-height: 100vh;
+        }
+        .glass-card {
+            background: var(--tg-theme-bg-color, #ffffff);
+            border-radius: 24px;
+            box-shadow: 0 8px 30px rgba(0,0,0,0.05);
+            border: 1px solid var(--tg-theme-hint-color, #e0e0e0);
+        }
+        .gradient-balance {
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            color: white;
+            border-radius: 28px;
+            padding: 20px;
+            margin-top: -20px;
+        }
+        .action-btn {
+            background: var(--tg-theme-button-color, #3390ec);
+            color: var(--tg-theme-button-text-color, #fff);
+            border-radius: 16px;
+            padding: 14px;
+            font-weight: 600;
+            border: none;
+            width: 100%;
+            transition: transform 0.15s ease;
+        }
+        .action-btn:active { transform: scale(0.96); }
+        .tx-status { padding: 4px 12px; border-radius: 30px; font-size: 12px; font-weight: 600; }
+    </style>
+</head>
+<body>
+    <div class="max-w-md mx-auto p-4 pb-20" id="app">
+        <!-- الهيدر -->
+        <div class="flex items-center justify-between mb-2 mt-2">
+            <div class="flex items-center gap-3">
+                <div class="w-12 h-12 rounded-full bg-gradient-to-r from-indigo-500 to-purple-500 flex items-center justify-center text-white text-xl font-bold">
+                    {{ user.first_name[0] }}
+                </div>
+                <div>
+                    <h1 class="text-xl font-bold">{{ user.first_name }}</h1>
+                    <p class="text-sm opacity-60">@{{ user.username or 'مستخدم' }}</p>
+                </div>
+            </div>
+            <button onclick="Telegram.WebApp.close()" class="text-2xl opacity-60 hover:opacity-100">✕</button>
+        </div>
+
+        <!-- بطاقة الرصيد -->
+        <div class="gradient-balance mt-4 shadow-lg shadow-purple-500/20">
+            <div class="flex justify-between items-center">
+                <div>
+                    <p class="opacity-80 text-sm">الرصيد المتاح</p>
+                    <p class="text-3xl font-extrabold tracking-wide" id="balanceDisplay">{{ user.balance }} $</p>
+                </div>
+                <div class="bg-white/20 backdrop-blur-sm px-4 py-2 rounded-2xl text-sm font-medium">
+                    🪙 حساب رئيسي
+                </div>
+            </div>
+            <div class="flex gap-3 mt-5">
+                <button onclick="openRecharge()" class="flex-1 bg-white/20 backdrop-blur-sm py-2.5 rounded-2xl text-sm font-bold hover:bg-white/30 transition">💰 شحن</button>
+                <button onclick="openWithdraw()" class="flex-1 bg-white/20 backdrop-blur-sm py-2.5 rounded-2xl text-sm font-bold hover:bg-white/30 transition">💸 سحب</button>
+            </div>
+        </div>
+
+        <button onclick="fetchBalance()" class="text-xs opacity-40 my-2 block mx-auto">تحديث الرصيد</button>
+
+        <!-- المعاملات -->
+        <div class="glass-card p-5 mt-6">
+            <div class="flex justify-between items-center mb-4">
+                <h2 class="font-bold text-lg">📊 آخر المعاملات</h2>
+                <span class="text-sm opacity-50">آخر 5</span>
+            </div>
+            <div id="transactionsList">
+                <div class="text-center opacity-40 py-6 text-sm">جاري تحميل المعاملات...</div>
+            </div>
+        </div>
+
+        <!-- أزرار سفلية -->
+        <div class="fixed bottom-6 left-4 right-4 max-w-md mx-auto flex gap-2 glass-card p-2">
+            <button onclick="window.location.reload()" class="flex-1 py-3 text-center rounded-xl bg-gray-100 dark:bg-gray-800 font-medium text-sm">🔄 تحديث</button>
+            <button onclick="Telegram.WebApp.openLink('https://t.me/YourBotName')" class="flex-1 py-3 text-center rounded-xl bg-[#3390ec] text-white font-medium text-sm">📱 البوت</button>
+        </div>
+    </div>
+
+    <!-- مودال السحب -->
+    <div id="withdrawModal" class="fixed inset-0 bg-black/50 backdrop-blur-sm flex items-center justify-center p-4 hidden z-50">
+        <div class="glass-card p-6 w-full max-w-sm">
+            <h3 class="font-bold text-lg mb-4">💸 طلب سحب</h3>
+            <input type="number" id="withdrawAmount" placeholder="المبلغ" class="w-full p-3 rounded-xl border border-gray-300 dark:border-gray-600 bg-transparent mb-3">
+            <input type="text" id="withdrawWallet" placeholder="عنوان المحفظة (USDT/BTC)" class="w-full p-3 rounded-xl border border-gray-300 dark:border-gray-600 bg-transparent mb-4">
+            <div class="flex gap-3">
+                <button onclick="submitWithdraw()" class="flex-1 action-btn">إرسال الطلب</button>
+                <button onclick="closeModal()" class="flex-1 bg-gray-200 dark:bg-gray-700 rounded-xl py-3 font-semibold">إلغاء</button>
+            </div>
+        </div>
+    </div>
+
+    <script>
+        const tg = window.Telegram.WebApp;
+        tg.expand();
+        tg.ready();
+
+        const root = document.documentElement;
+        root.style.setProperty('--tg-theme-bg-color', tg.themeParams.bg_color || '#ffffff');
+        root.style.setProperty('--tg-theme-text-color', tg.themeParams.text_color || '#000000');
+        root.style.setProperty('--tg-theme-hint-color', tg.themeParams.hint_color || '#999999');
+        root.style.setProperty('--tg-theme-button-color', tg.themeParams.button_color || '#3390ec');
+
+        async function authenticate() {
+            const initData = tg.initData;
+            if (!initData) return alert('يرجى فتح التطبيق من البوت!');
+            const res = await fetch('/validate', {
+                method: 'POST',
+                headers: {'Content-Type': 'application/x-www-form-urlencoded'},
+                body: `initData=${encodeURIComponent(initData)}`
+            });
+            const data = await res.json();
+            if (data.status !== 'success') {
+                alert('فشل التحقق من هويتك!');
+            } else {
+                document.getElementById('balanceDisplay').innerText = data.user.balance + ' $';
+            }
+        }
+        authenticate();
+
+        async function loadTransactions() {
+            const res = await fetch('/api/transactions');
+            const txs = await res.json();
+            const container = document.getElementById('transactionsList');
+            if (txs.length === 0) {
+                container.innerHTML = '<div class="text-center opacity-40 py-6">📭 لا توجد معاملات</div>';
+                return;
+            }
+            container.innerHTML = txs.map(t => `
+                <div class="flex justify-between items-center py-3 border-b border-gray-100 dark:border-gray-700 last:border-0">
+                    <div>
+                        <span class="font-medium">${t.type === 'deposit' ? '💰 إيداع' : '💸 سحب'}</span>
+                        <p class="text-xs opacity-50">${t.date}</p>
+                    </div>
+                    <div class="flex items-center gap-3">
+                        <span class="${t.type === 'deposit' ? 'text-green-500' : 'text-red-500'} font-bold">${t.type === 'deposit' ? '+' : '-'}${t.amount}$</span>
+                        <span class="tx-status ${t.status === 'completed' ? 'bg-green-100 text-green-700' : 'bg-yellow-100 text-yellow-700'}">${t.status}</span>
+                    </div>
+                </div>
+            `).join('');
+        }
+        loadTransactions();
+
+        function openWithdraw() { document.getElementById('withdrawModal').classList.remove('hidden'); }
+        function closeModal() { document.getElementById('withdrawModal').classList.add('hidden'); }
+        function openRecharge() { tg.openLink('https://t.me/YourBotName'); }
+
+        async function submitWithdraw() {
+            const amount = document.getElementById('withdrawAmount').value;
+            const wallet = document.getElementById('withdrawWallet').value;
+            if (!amount || amount <= 0 || !wallet) return alert('املأ جميع الحقول!');
+            const res = await fetch('/api/withdraw', {
+                method: 'POST',
+                headers: {'Content-Type': 'application/json'},
+                body: JSON.stringify({ amount: parseFloat(amount), wallet })
+            });
+            const data = await res.json();
+            if (data.error) alert(data.error);
+            else {
+                alert('✅ تم تقديم طلب السحب بنجاح!');
+                document.getElementById('balanceDisplay').innerText = data.new_balance + ' $';
+                closeModal();
+                loadTransactions();
+            }
+        }
+
+        async function fetchBalance() {
+            const res = await fetch('/validate', { method: 'POST', body: `initData=${encodeURIComponent(tg.initData)}`, headers: {'Content-Type': 'application/x-www-form-urlencoded'} });
+            const data = await res.json();
+            if (data.user) document.getElementById('balanceDisplay').innerText = data.user.balance + ' $';
+        }
+    </script>
+</body>
+</html>
